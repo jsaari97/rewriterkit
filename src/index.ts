@@ -9,6 +9,7 @@ export type {
   ExtractorConfig,
   FieldDiagnostics,
   FieldRule,
+  InferExtractedData,
   ListDiagnostics,
   ListRule,
   OutputRule,

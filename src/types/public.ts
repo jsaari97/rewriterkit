@@ -40,6 +40,60 @@ export interface ExtractorConfig {
   fields: Record<string, OutputRule>;
 }
 
+type LastArrayEntry<TArray extends readonly unknown[]> = TArray extends readonly [...infer TRest, infer TLast]
+  ? TRest['length'] extends number
+    ? TLast
+    : never
+  : never;
+
+type InferScalarFromTransforms<TTransforms> = TTransforms extends readonly TransformSpec[]
+  ? LastArrayEntry<TTransforms> extends 'parseNumber' | 'parseInteger'
+    ? number
+    : LastArrayEntry<TTransforms> extends 'parseBoolean'
+      ? boolean
+      : string
+  : string;
+
+type InferDefaultForOne<TRule extends FieldRule> = TRule extends { default: infer TDefault }
+  ? TDefault extends readonly unknown[]
+    ? never
+    : TDefault
+  : never;
+
+type InferDefaultForMany<TRule extends FieldRule> = TRule extends { default: infer TDefault }
+  ? TDefault extends readonly (infer TItem)[]
+    ? TItem
+    : never
+  : never;
+
+type InferFieldScalar<TRule extends FieldRule> = TRule['type'] extends 'exists'
+  ? boolean
+  : InferScalarFromTransforms<TRule['transforms']>;
+
+export type InferFieldValue<TRule extends FieldRule> = TRule['type'] extends 'exists'
+  ? boolean
+  : TRule['cardinality'] extends 'many'
+    ? Array<InferFieldScalar<TRule> | InferDefaultForMany<TRule>>
+    : InferFieldScalar<TRule> | InferDefaultForOne<TRule> | null;
+
+type InferListItemValue<TListRule extends ListRule> = {
+  [TFieldName in keyof TListRule['fields']]: TListRule['fields'][TFieldName] extends FieldRule
+    ? InferFieldValue<TListRule['fields'][TFieldName]>
+    : never;
+};
+
+export type InferOutputRuleValue<TRule extends OutputRule> = TRule extends ListRule
+  ? Array<InferListItemValue<TRule>>
+  : TRule extends FieldRule
+    ? InferFieldValue<TRule>
+    : never;
+
+export type InferExtractedData<TConfig extends ExtractorConfig> = {
+  [TFieldName in keyof TConfig['fields']]: TConfig['fields'][TFieldName] extends OutputRule
+    ? InferOutputRuleValue<TConfig['fields'][TFieldName]>
+    : never;
+};
+
 export interface ExtractOptions {
   baseUrl?: string;
 }
@@ -80,8 +134,8 @@ export interface ExtractionDiagnostics {
   lists: Record<string, ListDiagnostics>;
 }
 
-export interface ExtractionResult {
-  data: Record<string, unknown>;
+export interface ExtractionResult<TData = Record<string, unknown>> {
+  data: TData;
   diagnostics: ExtractionDiagnostics;
   ok: boolean;
   errors: ExtractionError[];

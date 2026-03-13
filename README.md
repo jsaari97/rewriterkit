@@ -21,7 +21,7 @@ const html = `
   </article>
 `;
 
-const config: ExtractorConfig = {
+const config = {
   version: '1',
   fields: {
     title: {
@@ -46,14 +46,14 @@ const config: ExtractorConfig = {
       type: 'exists',
     },
   },
-};
+} as const satisfies ExtractorConfig;
 
 const result = await extract(html, config, {
   baseUrl: 'https://example.com/catalog/',
 });
 
 console.log(result.ok);
-console.log(result.data);
+console.log(result.data); // { title, price, imageUrl, hasPromo }
 console.log(result.diagnostics);
 ```
 
@@ -118,12 +118,46 @@ const result = await extract(html, {
 });
 ```
 
+## Optional Explicit Output Type
+
+```ts
+type PageData = {
+  title: string | null;
+  tags: string[];
+};
+
+const result = await extract<PageData>(html, {
+  version: '1',
+  fields: {
+    title: {
+      selectors: ['h1'],
+      type: 'text',
+    },
+    tags: {
+      selectors: ['.tag'],
+      type: 'text',
+      cardinality: 'many',
+    },
+  },
+});
+```
+
 ## API
 
 ### `extract(input, config, options?)`
 
 ```ts
-function extract(input: string | Response, config: ExtractorConfig, options?: ExtractOptions): Promise<ExtractionResult>;
+function extract<TConfig extends ExtractorConfig>(
+  input: string | Response,
+  config: TConfig,
+  options?: ExtractOptions,
+): Promise<ExtractionResult<InferExtractedData<TConfig>>>;
+
+function extract<TData>(
+  input: string | Response,
+  config: ExtractorConfig,
+  options?: ExtractOptions,
+): Promise<ExtractionResult<TData>>;
 ```
 
 Behavior:
@@ -132,6 +166,17 @@ Behavior:
 - Uses selector priority order and finalizes the winning selector after stream completion.
 - Continues extraction across non-fatal field errors.
 - Throws runtime `ExtractionRuntimeError` with code `INVALID_INPUT` or `INTERNAL_ERROR` for fatal setup/runtime failures.
+
+Typed output:
+- Inferred by default from config literals (`as const satisfies ExtractorConfig`).
+- Optional override: use `extract<MyDataShape>(...)` to force a custom output type.
+
+Value inference:
+- `type: 'exists'` -> `boolean`
+- `type: 'text' | 'attribute'` -> `string | null` (`string[]` for `cardinality: 'many'`)
+- terminal `parseNumber` / `parseInteger` -> `number`
+- terminal `parseBoolean` -> `boolean`
+- list rules -> arrays of inferred item objects
 
 ### `validateConfig(config)`
 
@@ -164,7 +209,7 @@ Built-in transforms:
 
 ## Result Contract
 
-`ExtractionResult` returns:
+`ExtractionResult<TData>` returns:
 - `data`: extracted output for all declared fields.
 - `diagnostics`: extraction diagnostics split by top-level fields and lists.
 - `ok`: overall success flag.

@@ -5,6 +5,7 @@ import type {
   ExtractionResult,
   ExtractorConfig,
   FieldDiagnostics,
+  InferExtractedData,
   PrimitiveValue,
   ValidationIssue,
 } from '../types/public';
@@ -54,9 +55,9 @@ interface PendingTextCapture {
   activeCapture: ActiveTextCapture;
 }
 
-function createInvalidConfigResponse(issues: ValidationIssue[]): ExtractionResult {
+function createInvalidConfigResponse<TData>(issues: ValidationIssue[]): ExtractionResult<TData> {
   return {
-    data: {},
+    data: {} as TData,
     diagnostics: {
       fields: {},
       lists: {},
@@ -324,14 +325,26 @@ function finalizeField(
   };
 }
 
-export async function extract(
+export function extract<TConfig extends ExtractorConfig>(
+  input: string | Response,
+  config: TConfig,
+  options?: ExtractOptions,
+): Promise<ExtractionResult<InferExtractedData<TConfig>>>;
+
+export function extract<TData>(
   input: string | Response,
   config: ExtractorConfig,
+  options?: ExtractOptions,
+): Promise<ExtractionResult<TData>>;
+
+export async function extract<TConfig extends ExtractorConfig, TData = InferExtractedData<TConfig>>(
+  input: string | Response,
+  config: TConfig,
   options: ExtractOptions = {},
-): Promise<ExtractionResult> {
+): Promise<ExtractionResult<TData>> {
   const validation = validateConfig(config);
   if (!validation.ok) {
-    return createInvalidConfigResponse(validation.errors);
+    return createInvalidConfigResponse<TData>(validation.errors);
   }
 
   if (typeof HTMLRewriter === 'undefined') {
@@ -576,7 +589,7 @@ export async function extract(
   }
 
   return {
-    data,
+    data: data as TData,
     diagnostics,
     ok,
     errors,

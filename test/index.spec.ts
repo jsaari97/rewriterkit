@@ -557,6 +557,56 @@ describe('extract', () => {
     expect(result.errors.every((error) => error.code === 'INVALID_CONFIG')).toBe(true);
   });
 
+  it('infers output value types from config literals', async () => {
+    const config = {
+      version: '1',
+      fields: {
+        title: {
+          selectors: ['h1'],
+          type: 'text',
+          transforms: ['trim'],
+        },
+        price: {
+          selectors: ['.price'],
+          type: 'text',
+          transforms: ['parseNumber'],
+        },
+        inStock: {
+          selectors: ['.stock'],
+          type: 'text',
+          transforms: ['parseBoolean'],
+        },
+        tags: {
+          selectors: ['.tag'],
+          type: 'text',
+          cardinality: 'many',
+          transforms: ['trim'],
+        },
+        hasBadge: {
+          selectors: ['.badge'],
+          type: 'exists',
+        },
+      },
+    } as const satisfies ExtractorConfig;
+
+    const result = await extract(
+      '<article><h1> Demo </h1><span class="price">10</span><span class="stock">true</span><span class="tag">a</span></article>',
+      config,
+    );
+
+    const title: string | null = result.data.title;
+    const price: number | null = result.data.price;
+    const inStock: boolean | null = result.data.inStock;
+    const tags: string[] = result.data.tags;
+    const hasBadge: boolean = result.data.hasBadge;
+
+    expect(title).toBe('Demo');
+    expect(price).toBe(10);
+    expect(inStock).toBe(true);
+    expect(tags).toEqual(['a']);
+    expect(hasBadge).toBe(false);
+  });
+
   it('extracts many values from larger HTML payloads deterministically', async () => {
     const items = Array.from({ length: 500 }, (_, index) => `<li class="item" data-id="${index + 1}">Item ${index + 1}</li>`).join('');
     const html = `<ul>${items}</ul>`;
@@ -583,8 +633,8 @@ describe('extract', () => {
     expect(result.ok).toBe(true);
     expect((result.data.names as unknown[]).length).toBe(500);
     expect((result.data.ids as unknown[]).length).toBe(500);
-    expect((result.data.names as string[])[0]).toBe('Item 1');
-    expect((result.data.names as string[])[499]).toBe('Item 500');
+    expect(String((result.data.names as unknown[])[0])).toBe('Item 1');
+    expect(String((result.data.names as unknown[])[499])).toBe('Item 500');
     expect((result.data.ids as number[])[0]).toBe(1);
     expect((result.data.ids as number[])[499]).toBe(500);
   });
@@ -675,7 +725,8 @@ describe('extract', () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result.data.products as Array<Record<string, unknown>>)[1].title).toBeNull();
+    const secondProduct = result.data.products[1];
+    expect(secondProduct.title).toBeNull();
     expect(
       result.errors.some(
         (error) => error.code === 'REQUIRED_FIELD_MISSING' && error.list === 'products' && error.itemIndex === 1 && error.field === 'title',
