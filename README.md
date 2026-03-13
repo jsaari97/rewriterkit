@@ -28,13 +28,12 @@ const config: ExtractorConfig = {
       selectors: ['h1.title', 'h1'],
       type: 'text',
       required: true,
-      trim: true,
+      transforms: ['trim'],
     },
     price: {
       selectors: ['.price'],
       type: 'text',
-      trim: true,
-      transforms: ['parseNumber'],
+      transforms: ['trim', 'parseNumber'],
     },
     imageUrl: {
       selectors: ['img.hero'],
@@ -100,7 +99,7 @@ const result = await extract(html, {
         title: {
           selectors: ['.title'],
           type: 'text',
-          trim: true,
+          transforms: ['trim'],
         },
         price: {
           selectors: ['.price'],
@@ -189,7 +188,6 @@ Missing value behavior:
       "valueProduced": true,
       "usedDefault": false,
       "required": true,
-      "warnings": [],
       "errors": []
     }
   },
@@ -198,7 +196,6 @@ Missing value behavior:
       "field": "products",
       "itemSelector": ".product-card",
       "itemCount": 2,
-      "warnings": [],
       "errors": [],
       "items": [
         {
@@ -213,7 +210,6 @@ Missing value behavior:
               "valueProduced": true,
               "usedDefault": false,
               "required": false,
-              "warnings": [],
               "errors": []
             }
           }

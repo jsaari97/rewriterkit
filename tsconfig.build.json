@@ -10,5 +10,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["test", "worker-configuration.d.ts"]
+  "exclude": ["test"]
 }

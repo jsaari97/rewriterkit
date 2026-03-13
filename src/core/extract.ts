@@ -8,9 +8,9 @@ import type {
   PrimitiveValue,
   ValidationIssue,
 } from '../types/public';
-import { getValidatedCompiledConfig } from './cache';
+import { validateConfig } from '../config/validate';
 import { applyTransforms } from './transforms';
-import type { CompiledFieldPlan, CompiledListPlan } from './compile';
+import { compileConfig, type CompiledFieldPlan, type CompiledListPlan } from './compile';
 import { createInternalError, createInvalidInputError } from './errors';
 
 interface OrderedValue {
@@ -29,7 +29,6 @@ interface FieldRuntimeState {
   selectorCandidates: Record<string, OrderedValue[]>;
   activeTextCaptures: Record<string, ActiveTextCapture[]>;
   usedDefault: boolean;
-  warnings: string[];
   errors: string[];
   winningSelector?: string;
   valueProduced: boolean;
@@ -46,7 +45,6 @@ interface ListRuntimeState {
     index: number;
     fields: Record<string, FieldDiagnostics>;
   }>;
-  warnings: string[];
   errors: string[];
 }
 
@@ -103,7 +101,6 @@ function initializeRuntimeState(field: CompiledFieldPlan): FieldRuntimeState {
     selectorCandidates,
     activeTextCaptures,
     usedDefault: false,
-    warnings: [],
     errors: [],
     valueProduced: false,
   };
@@ -269,7 +266,6 @@ function finalizeField(
       const transformed = applyTransforms({
         value: baseValue,
         cardinality: field.cardinality,
-        trim: field.trim,
         transforms: field.transforms,
         baseUrl: options.baseUrl,
       });
@@ -324,7 +320,6 @@ function finalizeField(
       valueProduced: state.valueProduced,
       usedDefault: state.usedDefault,
       required: field.required,
-      warnings: [...state.warnings],
       errors: [...state.errors],
     },
   };
@@ -335,7 +330,7 @@ export async function extract(
   config: ExtractorConfig,
   options: ExtractOptions = {},
 ): Promise<ExtractionResult> {
-  const { validation, compiled } = getValidatedCompiledConfig(config);
+  const validation = validateConfig(config);
   if (!validation.ok) {
     return createInvalidConfigResponse(validation.errors);
   }
@@ -345,11 +340,7 @@ export async function extract(
   }
 
   const response = resolveInput(input);
-  if (!compiled) {
-    throw createInternalError('Compiled extraction plan was not available for a valid config.');
-  }
-
-  const plan = compiled;
+  const plan = compileConfig(config);
 
   const topRuntime = new Map<string, FieldRuntimeState>();
   for (const [fieldName, field] of plan.topFields.entries()) {
@@ -362,7 +353,6 @@ export async function extract(
       activeItems: [],
       data: [],
       diagnosticsItems: [],
-      warnings: [],
       errors: [],
     });
   }
@@ -578,7 +568,6 @@ export async function extract(
       field: listName,
       itemSelector: listPlan.itemSelector,
       itemCount: runtime.data.length,
-      warnings: [...runtime.warnings],
       errors: [...runtime.errors],
       items: runtime.diagnosticsItems.map((item) => ({
         index: item.index,

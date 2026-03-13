@@ -3,7 +3,6 @@ import type { TransformSpec } from '../types/public';
 export interface ApplyTransformsInput {
   value: unknown;
   cardinality: 'one' | 'many';
-  trim: boolean;
   transforms: TransformSpec[];
   baseUrl?: string;
 }
@@ -186,7 +185,7 @@ function applyScalarTransform(value: unknown, transform: TransformSpec, baseUrl?
 }
 
 export function applyTransforms(input: ApplyTransformsInput): ApplyTransformsResult {
-  const transformOrder: TransformSpec[] = input.trim ? (['trim', ...input.transforms] as TransformSpec[]) : [...input.transforms];
+  const transformOrder = [...input.transforms];
 
   if (input.cardinality === 'many') {
     if (!Array.isArray(input.value)) {

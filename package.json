@@ -20,20 +20,15 @@
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "check": "npm run lint && npm run test:run && npm run build",
     "clean": "rm -rf dist",
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
     "lint": "npm run typecheck",
-    "start": "wrangler dev",
     "test": "vitest",
     "test:run": "vitest --run",
-    "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.4",
     "@types/node": "^25.5.0",
     "typescript": "^5.5.2",
-    "vitest": "~3.2.0",
-    "wrangler": "^4.73.0"
+    "vitest": "~3.2.0"
   }
 }

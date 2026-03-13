@@ -17,7 +17,6 @@ export type TransformSpec =
     };
 
 export interface FieldRule {
-  kind?: 'field';
   selectors: string[];
   type: 'text' | 'attribute' | 'exists';
   cardinality?: 'one' | 'many';
@@ -25,7 +24,6 @@ export interface FieldRule {
   default?: PrimitiveValue | PrimitiveValue[] | null;
   attribute?: string;
   transforms?: TransformSpec[];
-  trim?: boolean;
   description?: string;
 }
 
@@ -55,7 +53,6 @@ export interface FieldDiagnostics {
   valueProduced: boolean;
   usedDefault: boolean;
   required: boolean;
-  warnings: string[];
   errors: string[];
 }
 
@@ -71,7 +68,6 @@ export interface ListDiagnostics {
   field: string;
   itemSelector: string;
   itemCount: number;
-  warnings: string[];
   errors: string[];
   items: Array<{
     index: number;

@@ -10,7 +10,7 @@ describe('validateConfig', () => {
           selectors: ['h1', '.title'],
           type: 'text',
           required: true,
-          trim: true,
+          transforms: ['trim'],
         },
         imageUrl: {
           selectors: ['img.hero'],
@@ -90,6 +90,38 @@ describe('validateConfig', () => {
     expect(result.errors.some((issue) => issue.code === 'invalid_kind' && issue.path === 'fields.products.kind')).toBe(true);
   });
 
+  it('rejects explicit field kind markers', () => {
+    const result = validateConfig({
+      version: '1',
+      fields: {
+        title: {
+          kind: 'field',
+          selectors: ['h1'],
+          type: 'text',
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((issue) => issue.code === 'invalid_kind' && issue.path === 'fields.title.kind')).toBe(true);
+  });
+
+  it('rejects trim property', () => {
+    const result = validateConfig({
+      version: '1',
+      fields: {
+        title: {
+          selectors: ['h1'],
+          type: 'text',
+          trim: true,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((issue) => issue.code === 'unexpected_property' && issue.path === 'fields.title.trim')).toBe(true);
+  });
+
   it('validates list rules with nested field rules', () => {
     const result = validateConfig({
       version: '1',
@@ -121,7 +153,7 @@ describe('extract', () => {
         title: {
           selectors: ['h1'],
           type: 'text',
-          trim: true,
+          transforms: ['trim'],
           required: true,
         },
       },
@@ -216,7 +248,7 @@ describe('extract', () => {
           selectors: ['li.item'],
           type: 'text',
           cardinality: 'many',
-          trim: true,
+          transforms: ['trim'],
         },
         sku: {
           selectors: ['li.item'],
@@ -241,13 +273,13 @@ describe('extract', () => {
         title: {
           selectors: ['h1.title'],
           type: 'text',
-          trim: true,
+          transforms: ['trim'],
         },
         titles: {
           selectors: ['h1.title'],
           type: 'text',
           cardinality: 'many',
-          trim: true,
+          transforms: ['trim'],
         },
       },
     });
@@ -362,8 +394,7 @@ describe('extract', () => {
           price: {
             selectors: ['.price'],
             type: 'text',
-            trim: true,
-            transforms: ['parseNumber'],
+            transforms: ['trim', 'parseNumber'],
           },
           link: {
             selectors: ['a.link'],
@@ -537,7 +568,7 @@ describe('extract', () => {
           selectors: ['li.item'],
           type: 'text',
           cardinality: 'many',
-          trim: true,
+          transforms: ['trim'],
         },
         ids: {
           selectors: ['li.item'],
@@ -585,7 +616,7 @@ describe('extract', () => {
               title: {
                 selectors: ['.title'],
                 type: 'text',
-                trim: true,
+                transforms: ['trim'],
                 required: true,
               },
               price: {

@@ -17,14 +17,3 @@ export type {
   ValidationIssue,
   ValidationResult,
 } from './types/public';
-
-export default {
-  async fetch(): Promise<Response> {
-    return new Response('RewriterKit is a library module. Import and use extract()/validateConfig().', {
-      status: 404,
-      headers: {
-        'content-type': 'text/plain; charset=utf-8',
-      },
-    });
-  },
-};

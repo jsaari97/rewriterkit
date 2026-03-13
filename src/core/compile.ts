@@ -1,4 +1,4 @@
-import type { ExtractorConfig, FieldRule, PrimitiveValue, TransformSpec } from '../types/public';
+import type { ExtractorConfig, FieldRule, ListRule, OutputRule, PrimitiveValue, TransformSpec } from '../types/public';
 
 export interface CompiledFieldPlan {
   field: string;
@@ -6,7 +6,6 @@ export interface CompiledFieldPlan {
   type: 'text' | 'attribute' | 'exists';
   cardinality: 'one' | 'many';
   required: boolean;
-  trim: boolean;
   transforms: TransformSpec[];
   attribute?: string;
   defaultDefined: boolean;
@@ -32,6 +31,10 @@ export interface CompiledPlan {
   listFieldSelectors: Map<string, CompiledListFieldTarget[]>;
 }
 
+function isListRule(rule: OutputRule): rule is ListRule {
+  return 'kind' in rule && rule.kind === 'list';
+}
+
 function compileFieldRule(fieldName: string, rule: FieldRule): CompiledFieldPlan {
   return {
     field: fieldName,
@@ -39,7 +42,6 @@ function compileFieldRule(fieldName: string, rule: FieldRule): CompiledFieldPlan
     type: rule.type,
     cardinality: rule.cardinality ?? 'one',
     required: rule.required ?? false,
-    trim: rule.trim ?? false,
     transforms: rule.transforms ? [...rule.transforms] : [],
     attribute: rule.attribute,
     defaultDefined: Object.prototype.hasOwnProperty.call(rule, 'default'),
@@ -64,7 +66,7 @@ export function compileConfig(config: ExtractorConfig): CompiledPlan {
   const listFieldSelectors = new Map<string, CompiledListFieldTarget[]>();
 
   for (const [outputKey, rule] of Object.entries(config.fields)) {
-    if (rule.kind === 'list') {
+    if (isListRule(rule)) {
       const compiledListFields = new Map<string, CompiledFieldPlan>();
 
       for (const [itemFieldName, itemFieldRule] of Object.entries(rule.fields)) {
