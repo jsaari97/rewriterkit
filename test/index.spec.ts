@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extract, ExtractionRuntimeError, validateConfig, type ExtractorConfig } from '../src';
+import { extract, validateConfig, type ExtractionRuntimeError, type ExtractorConfig } from '../src';
 
 describe('validateConfig', () => {
   it('accepts a valid v1 config', () => {

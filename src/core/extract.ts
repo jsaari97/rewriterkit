@@ -251,7 +251,6 @@ function finalizeField(
   const matchCount = winningSelector ? state.selectorMatchCounts[winningSelector] : 0;
 
   let finalValue: unknown;
-  let hasRawValue = false;
   let transformFailed = false;
 
   if (field.type === 'exists') {
@@ -259,7 +258,7 @@ function finalizeField(
     state.valueProduced = true;
   } else {
     const rawValues = winningSelector ? sortedCandidateValues(state, winningSelector) : [];
-    hasRawValue = rawValues.length > 0;
+    const hasRawValue = rawValues.length > 0;
 
     if (hasRawValue) {
       const baseValue = field.cardinality === 'one' ? rawValues[0] : rawValues;

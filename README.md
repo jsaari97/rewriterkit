@@ -223,6 +223,7 @@ Missing value behavior:
 ## Development
 
 ```bash
+npm run lint
 npm run typecheck
 npm run test:run
 npm run build
