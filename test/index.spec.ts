@@ -73,6 +73,42 @@ describe('validateConfig', () => {
     expect(result.ok).toBe(false);
     expect(result.errors.some((issue) => issue.code === 'invalid_regex' && issue.path === 'fields.title.transforms[0].pattern')).toBe(true);
   });
+
+  it('rejects unknown top-level kind values', () => {
+    const result = validateConfig({
+      version: '1',
+      fields: {
+        products: {
+          kind: 'lsit',
+          itemSelector: '.product',
+          fields: {},
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((issue) => issue.code === 'invalid_kind' && issue.path === 'fields.products.kind')).toBe(true);
+  });
+
+  it('validates list rules with nested field rules', () => {
+    const result = validateConfig({
+      version: '1',
+      fields: {
+        products: {
+          kind: 'list',
+          itemSelector: '.product',
+          fields: {
+            title: {
+              selectors: ['.title'],
+              type: 'text',
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('extract', () => {
@@ -93,7 +129,7 @@ describe('extract', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data.title).toBe('Product Title');
-    expect(result.diagnostics.title.winningSelector).toBe('h1');
+    expect(result.diagnostics.fields.title.winningSelector).toBe('h1');
     expect(result.errors).toEqual([]);
   });
 
@@ -148,8 +184,8 @@ describe('extract', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data.title).toBe('');
-    expect(result.diagnostics.title.winningSelector).toBe('h1');
-    expect(result.diagnostics.title.valueProduced).toBe(true);
+    expect(result.diagnostics.fields.title.winningSelector).toBe('h1');
+    expect(result.diagnostics.fields.title.valueProduced).toBe(true);
   });
 
   it('continues within the same selector for attribute cardinality one', async () => {
@@ -238,8 +274,8 @@ describe('extract', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data.items).toEqual(['Outer Inner Tail', 'Inner']);
-    expect(result.diagnostics.items.winningSelector).toBe('.item');
-    expect(result.diagnostics.items.matchCount).toBe(2);
+    expect(result.diagnostics.fields.items.winningSelector).toBe('.item');
+    expect(result.diagnostics.fields.items.matchCount).toBe(2);
   });
 
   it('extracts exists booleans', async () => {
@@ -311,7 +347,7 @@ describe('extract', () => {
     expect(result.ok).toBe(true);
     expect(result.data.title).toBe('Untitled');
     expect(result.data.tags).toEqual(['news', 'featured']);
-    expect(result.diagnostics.title.usedDefault).toBe(true);
+    expect(result.diagnostics.fields.title.usedDefault).toBe(true);
   });
 
   it('applies transforms in order', async () => {
@@ -399,7 +435,7 @@ describe('extract', () => {
 
     expect(result.ok).toBe(false);
     expect(result.data.price).toBeNull();
-    expect(result.diagnostics.price.usedDefault).toBe(false);
+    expect(result.diagnostics.fields.price.usedDefault).toBe(false);
     expect(result.errors.some((error) => error.code === 'TRANSFORM_FAILED' && error.field === 'price')).toBe(true);
   });
 
@@ -421,7 +457,7 @@ describe('extract', () => {
     expect(result.ok).toBe(false);
     expect(result.data.imageUrl).toBeNull();
     expect(result.errors.some((error) => error.code === 'TRANSFORM_FAILED')).toBe(true);
-    expect(result.diagnostics.imageUrl.errors[0]).toContain('baseUrl');
+    expect(result.diagnostics.fields.imageUrl.errors[0]).toContain('baseUrl');
   });
 
   it('reports selector diagnostics details with attribute fallback', async () => {
@@ -441,13 +477,13 @@ describe('extract', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data.imageUrl).toBe('/ok.jpg');
-    expect(result.diagnostics.imageUrl.selectorTried).toEqual(['img.hero', 'img.fallback']);
-    expect(result.diagnostics.imageUrl.matched).toBe(true);
-    expect(result.diagnostics.imageUrl.winningSelector).toBe('img.fallback');
-    expect(result.diagnostics.imageUrl.matchCount).toBe(1);
-    expect(result.diagnostics.imageUrl.valueProduced).toBe(true);
-    expect(result.diagnostics.imageUrl.usedDefault).toBe(false);
-    expect(result.diagnostics.imageUrl.errors).toEqual([]);
+    expect(result.diagnostics.fields.imageUrl.selectorTried).toEqual(['img.hero', 'img.fallback']);
+    expect(result.diagnostics.fields.imageUrl.matched).toBe(true);
+    expect(result.diagnostics.fields.imageUrl.winningSelector).toBe('img.fallback');
+    expect(result.diagnostics.fields.imageUrl.matchCount).toBe(1);
+    expect(result.diagnostics.fields.imageUrl.valueProduced).toBe(true);
+    expect(result.diagnostics.fields.imageUrl.usedDefault).toBe(false);
+    expect(result.diagnostics.fields.imageUrl.errors).toEqual([]);
   });
 
   it('returns null and empty arrays for missing non-required fields', async () => {
@@ -485,7 +521,7 @@ describe('extract', () => {
 
     expect(result.ok).toBe(false);
     expect(result.data).toEqual({});
-    expect(result.diagnostics).toEqual({});
+    expect(result.diagnostics).toEqual({ fields: {}, lists: {} });
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors.every((error) => error.code === 'INVALID_CONFIG')).toBe(true);
   });
@@ -520,5 +556,99 @@ describe('extract', () => {
     expect((result.data.names as string[])[499]).toBe('Item 500');
     expect((result.data.ids as number[])[0]).toBe(1);
     expect((result.data.ids as number[])[499]).toBe(500);
+  });
+
+  it('extracts list-of-objects under top-level fields', async () => {
+    const html = `
+      <section>
+        <article class="product">
+          <h2 class="title">One</h2>
+          <span class="price">12.50</span>
+          <a class="link" href="/one">One</a>
+        </article>
+        <article class="product">
+          <h2 class="title">Two</h2>
+          <a class="link" href="/two">Two</a>
+        </article>
+      </section>
+    `;
+
+    const result = await extract(
+      html,
+      {
+        version: '1',
+        fields: {
+          products: {
+            kind: 'list',
+            itemSelector: '.product',
+            fields: {
+              title: {
+                selectors: ['.title'],
+                type: 'text',
+                trim: true,
+                required: true,
+              },
+              price: {
+                selectors: ['.price'],
+                type: 'text',
+                transforms: ['parseNumber'],
+              },
+              url: {
+                selectors: ['a.link'],
+                type: 'attribute',
+                attribute: 'href',
+                transforms: ['absoluteUrl'],
+              },
+            },
+          },
+        },
+      },
+      { baseUrl: 'https://example.com/' },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data.products).toEqual([
+      { title: 'One', price: 12.5, url: 'https://example.com/one' },
+      { title: 'Two', price: null, url: 'https://example.com/two' },
+    ]);
+    expect(result.diagnostics.lists.products.itemCount).toBe(2);
+    expect(result.diagnostics.lists.products.items[0].fields.title.winningSelector).toBe('.title');
+    expect(result.diagnostics.lists.products.items[1].fields.price.valueProduced).toBe(false);
+  });
+
+  it('adds per-item errors for required list fields', async () => {
+    const html = `
+      <div class="product"><span class="title">Alpha</span></div>
+      <div class="product"><span class="price">10</span></div>
+    `;
+
+    const result = await extract(html, {
+      version: '1',
+      fields: {
+        products: {
+          kind: 'list',
+          itemSelector: '.product',
+          fields: {
+            title: {
+              selectors: ['.title'],
+              type: 'text',
+              required: true,
+            },
+            price: {
+              selectors: ['.price'],
+              type: 'text',
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result.data.products as Array<Record<string, unknown>>)[1].title).toBeNull();
+    expect(
+      result.errors.some(
+        (error) => error.code === 'REQUIRED_FIELD_MISSING' && error.list === 'products' && error.itemIndex === 1 && error.field === 'title',
+      ),
+    ).toBe(true);
   });
 });

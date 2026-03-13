@@ -87,6 +87,38 @@ const result = await extract(html, {
 });
 ```
 
+## List Extraction Example
+
+```ts
+const result = await extract(html, {
+  version: '1',
+  fields: {
+    products: {
+      kind: 'list',
+      itemSelector: '.product-card',
+      fields: {
+        title: {
+          selectors: ['.title'],
+          type: 'text',
+          trim: true,
+        },
+        price: {
+          selectors: ['.price'],
+          type: 'text',
+          transforms: ['parseNumber'],
+        },
+        url: {
+          selectors: ['a.title'],
+          type: 'attribute',
+          attribute: 'href',
+          transforms: ['absoluteUrl'],
+        },
+      },
+    },
+  },
+});
+```
+
 ## API
 
 ### `extract(input, config, options?)`
@@ -135,7 +167,7 @@ Built-in transforms:
 
 `ExtractionResult` returns:
 - `data`: extracted output for all declared fields.
-- `diagnostics`: per-field extraction metadata.
+- `diagnostics`: extraction diagnostics split by top-level fields and lists.
 - `ok`: overall success flag.
 - `errors`: aggregate non-fatal extraction errors.
 
@@ -147,17 +179,47 @@ Missing value behavior:
 
 ```json
 {
-  "title": {
-    "field": "title",
-    "matched": true,
-    "selectorTried": ["h1", ".title"],
-    "winningSelector": "h1",
-    "matchCount": 1,
-    "valueProduced": true,
-    "usedDefault": false,
-    "required": true,
-    "warnings": [],
-    "errors": []
+  "fields": {
+    "title": {
+      "field": "title",
+      "matched": true,
+      "selectorTried": ["h1", ".title"],
+      "winningSelector": "h1",
+      "matchCount": 1,
+      "valueProduced": true,
+      "usedDefault": false,
+      "required": true,
+      "warnings": [],
+      "errors": []
+    }
+  },
+  "lists": {
+    "products": {
+      "field": "products",
+      "itemSelector": ".product-card",
+      "itemCount": 2,
+      "warnings": [],
+      "errors": [],
+      "items": [
+        {
+          "index": 0,
+          "fields": {
+            "title": {
+              "field": "title",
+              "matched": true,
+              "selectorTried": [".title"],
+              "winningSelector": ".title",
+              "matchCount": 1,
+              "valueProduced": true,
+              "usedDefault": false,
+              "required": false,
+              "warnings": [],
+              "errors": []
+            }
+          }
+        }
+      ]
+    }
   }
 }
 ```
