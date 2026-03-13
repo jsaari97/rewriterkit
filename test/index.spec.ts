@@ -565,6 +565,7 @@ describe('extract', () => {
           selectors: ['h1'],
           type: 'text',
           transforms: ['trim'],
+          required: true,
         },
         price: {
           selectors: ['.price'],
@@ -594,7 +595,7 @@ describe('extract', () => {
       config,
     );
 
-    const title: string | null = result.data.title;
+    const title: string = result.data.title;
     const price: number | null = result.data.price;
     const inStock: boolean | null = result.data.inStock;
     const tags: string[] = result.data.tags;

@@ -174,6 +174,7 @@ Typed output:
 Value inference:
 - `type: 'exists'` -> `boolean`
 - `type: 'text' | 'attribute'` -> `string | null` (`string[]` for `cardinality: 'many'`)
+- `required: true` on one-cardinality `text`/`attribute` fields removes `null`
 - terminal `parseNumber` / `parseInteger` -> `number`
 - terminal `parseBoolean` -> `boolean`
 - list rules -> arrays of inferred item objects

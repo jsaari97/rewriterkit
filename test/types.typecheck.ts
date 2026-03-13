@@ -14,10 +14,21 @@ const inferredConfig = {
       selectors: ['h1'],
       type: 'text',
     },
+    requiredTitle: {
+      selectors: ['h1'],
+      type: 'text',
+      required: true,
+    },
     price: {
       selectors: ['.price'],
       type: 'text',
       transforms: ['parseNumber'],
+    },
+    requiredPrice: {
+      selectors: ['.price'],
+      type: 'text',
+      transforms: ['parseNumber'],
+      required: true,
     },
     inStock: {
       selectors: ['.stock'],
@@ -50,6 +61,7 @@ const inferredConfig = {
         label: {
           selectors: ['.label'],
           type: 'text',
+          required: true,
         },
         available: {
           selectors: ['.available'],
@@ -69,13 +81,15 @@ const inferredConfig = {
 type InferredData = InferExtractedData<typeof inferredConfig>;
 
 assertTrue<IsEqual<InferredData['title'], string | null>>(true);
+assertTrue<IsEqual<InferredData['requiredTitle'], string>>(true);
 assertTrue<IsEqual<InferredData['price'], number | null>>(true);
+assertTrue<IsEqual<InferredData['requiredPrice'], number>>(true);
 assertTrue<IsEqual<InferredData['inStock'], boolean | null>>(true);
 assertTrue<IsEqual<InferredData['rank'], string | 0 | null>>(true);
 assertTrue<IsEqual<InferredData['tags'], string[]>>(true);
 assertTrue<IsEqual<InferredData['hasPromo'], boolean>>(true);
 assertTrue<IsEqual<InferredData['products'][number]['id'], number | null>>(true);
-assertTrue<IsEqual<InferredData['products'][number]['label'], string | null>>(true);
+assertTrue<IsEqual<InferredData['products'][number]['label'], string>>(true);
 assertTrue<IsEqual<InferredData['products'][number]['available'], boolean>>(true);
 assertTrue<IsEqual<InferredData['products'][number]['scores'], number[]>>(true);
 
@@ -85,6 +99,21 @@ void inferredResultContract;
 type InferredResult = Awaited<typeof inferredPromise>;
 assertTrue<IsEqual<InferredResult['data']['price'], number | null>>(true);
 assertTrue<IsEqual<InferredResult['data']['products'][number]['scores'], number[]>>(true);
+
+const nonConstPromise = extract('<main></main>', {
+  version: '1',
+  fields: {
+    title: {
+      selectors: ['h1'],
+      type: 'text',
+      transforms: ['trim'],
+      required: true,
+    },
+  },
+});
+void nonConstPromise;
+type NonConstResult = Awaited<typeof nonConstPromise>;
+assertTrue<IsEqual<NonConstResult['data']['title'], string>>(true);
 
 interface ExplicitDataShape {
   sku: string;

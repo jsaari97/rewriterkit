@@ -44,7 +44,9 @@ type LastArrayEntry<TArray extends readonly unknown[]> = TArray extends readonly
   ? TRest['length'] extends number
     ? TLast
     : never
-  : never;
+  : TArray extends readonly (infer TItem)[]
+    ? TItem
+    : never;
 
 type InferScalarFromTransforms<TTransforms> = TTransforms extends readonly TransformSpec[]
   ? LastArrayEntry<TTransforms> extends 'parseNumber' | 'parseInteger'
@@ -74,7 +76,9 @@ export type InferFieldValue<TRule extends FieldRule> = TRule['type'] extends 'ex
   ? boolean
   : TRule['cardinality'] extends 'many'
     ? Array<InferFieldScalar<TRule> | InferDefaultForMany<TRule>>
-    : InferFieldScalar<TRule> | InferDefaultForOne<TRule> | null;
+    : TRule extends { required: true }
+      ? InferFieldScalar<TRule> | InferDefaultForOne<TRule>
+      : InferFieldScalar<TRule> | InferDefaultForOne<TRule> | null;
 
 type InferListItemValue<TListRule extends ListRule> = {
   [TFieldName in keyof TListRule['fields']]: TListRule['fields'][TFieldName] extends FieldRule
