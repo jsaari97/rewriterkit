@@ -8,6 +8,11 @@ The library is **not** responsible for fetching content. Its input is raw HTML o
 
 Primary goal: make `HTMLRewriter` practical for schema-driven extraction use cases such as scraping, metadata extraction, product/article parsing, and resilient selector maintenance.
 
+Normative language in this document:
+
+- `must` indicates a required v1 behavior.
+- `should` indicates guidance or a non-blocking recommendation.
+
 ## 2. Goals
 
 ### 2.1 Primary goals
@@ -46,8 +51,8 @@ The intended architecture is:
 - Primary target: Cloudflare Workers.
 - The implementation must use the platform `HTMLRewriter` API, or a compatible abstraction for tests.
 - The public API must not assume Node-only features.
-- The library should be written in TypeScript.
-- The package should be ESM-first.
+- The library must be written in TypeScript.
+- The package must be ESM-first.
 
 ## 5. Public API
 
@@ -68,10 +73,12 @@ Behavior:
 - If `input` is a `string`, treat it as raw HTML.
 - If `input` is a `Response`, consume its body as HTML.
 - Validate config before extraction.
+- If config is invalid, return `ok: false` with `INVALID_CONFIG` errors. Do not throw for invalid config.
 - Run extraction rules.
 - Return data and diagnostics.
 - Never throw for ordinary selector misses.
 - Throw only for fatal setup/runtime errors, such as invalid input types or impossible internal states.
+- On per-field extraction errors (for example transform failure or required-field miss), return `ok: false` and continue evaluating other fields.
 
 ### 5.1.2 `validateConfig`
 
@@ -97,7 +104,7 @@ export interface ExtractorConfig {
 ```ts
 export interface FieldRule {
   selectors: string[];
-  type: 'text' | 'html' | 'attribute' | 'exists';
+  type: 'text' | 'attribute' | 'exists';
   cardinality?: 'one' | 'many';
   required?: boolean;
   default?: PrimitiveValue | PrimitiveValue[] | null;
@@ -139,9 +146,6 @@ export type TransformSpec =
 ```ts
 export interface ExtractOptions {
   baseUrl?: string;
-  includeDiagnostics?: boolean;
-  includeMatchValues?: boolean;
-  maxMatchesPerField?: number;
 }
 ```
 
@@ -177,7 +181,7 @@ export interface FieldDiagnostics {
 
 ```ts
 export interface ExtractionError {
-  code: 'INVALID_CONFIG' | 'INVALID_INPUT' | 'REQUIRED_FIELD_MISSING' | 'ATTRIBUTE_REQUIRED' | 'TRANSFORM_FAILED' | 'INTERNAL_ERROR';
+  code: 'INVALID_CONFIG' | 'INVALID_INPUT' | 'REQUIRED_FIELD_MISSING' | 'TRANSFORM_FAILED' | 'INTERNAL_ERROR';
   message: string;
   field?: string;
 }
@@ -206,7 +210,8 @@ Rules:
 
 - `selectors` are tried in order.
 - The first selector that yields at least one usable match becomes the `winningSelector`.
-- Once a winning selector is found, later selectors are not evaluated for that field.
+- Winner selection is finalized after the document stream is fully processed, so selector priority is deterministic even in streaming mode.
+- Once a winning selector is finalized, only values from that selector contribute to field output.
 - `cardinality` defaults to `'one'`.
 - `required` defaults to `false`.
 - `trim` defaults to `false`.
@@ -226,19 +231,12 @@ For `cardinality: 'many'`:
 - Extract text content from all matched elements for the winning selector.
 - Preserve document order.
 
-## 6.3 `html`
+## 6.3 Reserved: `html` (v1.1+)
 
-Extract inner HTML from matched element(s).
+`html` extraction is explicitly out of scope for v1.
 
-For `cardinality: 'one'`:
-
-- Use inner HTML of the first matched element.
-
-For `cardinality: 'many'`:
-
-- Extract inner HTML from all matched elements in document order.
-
-Note: implementation may need buffering logic to reconstruct element inner HTML using `HTMLRewriter` callbacks. If this proves impractical in v1, `html` may be deferred behind a clearly documented limitation. `text`, `attribute`, and `exists` are mandatory for v1.
+- v1 configs must not declare `type: 'html'`.
+- v1.1+ may add `html` once stream-safe behavior is fully specified and tested.
 
 ## 6.4 `attribute`
 
@@ -268,8 +266,9 @@ Rules:
 - `cardinality` must be treated as `'one'`.
 - Any provided `cardinality: 'many'` is a validation error.
 - Result is `true` if any match is found, otherwise `false`.
-- `default` is allowed but generally unnecessary.
-- `exists` should model the presence of the selected condition directly.
+- `default` is not allowed for `exists` fields in v1 (validation error).
+- `required` is not allowed for `exists` fields in v1 (validation error).
+- `exists` must model the presence of the selected condition directly.
 
 Naming guidance:
 
@@ -313,6 +312,12 @@ Order:
 
 ## 8.1 Transform semantics
 
+Array policy for v1:
+
+- For `cardinality: 'one'`, transforms apply to one scalar value.
+- For `cardinality: 'many'`, transforms apply element-by-element in document order.
+- A transform that is not type-compatible with a produced value (for example `toLowerCase` on a number) is a transform failure.
+
 ### `trim`
 
 - For strings: trim leading/trailing whitespace.
@@ -322,39 +327,47 @@ Order:
 
 - Collapse repeated whitespace into a single space.
 - Trim ends.
+- For arrays, apply per entry.
 
 ### `toLowerCase`
 
 - Lowercase string values.
+- For arrays, apply per entry.
 
 ### `toUpperCase`
 
 - Uppercase string values.
+- For arrays, apply per entry.
 
 ### `parseNumber`
 
 - Convert string to `number`.
 - If parsing fails, record transform failure for the field.
+- For arrays, apply per entry.
 
 ### `parseInteger`
 
 - Convert string to integer.
 - If parsing fails, record transform failure for the field.
+- For arrays, apply per entry.
 
 ### `parseBoolean`
 
 - Accept case-insensitive values: `true`, `false`, `1`, `0`, `yes`, `no`.
 - Otherwise fail.
+- For arrays, apply per entry.
 
 ### `absoluteUrl`
 
 - Resolve relative URLs against `options.baseUrl`.
 - If no `baseUrl` is available and a relative URL is encountered, record transform failure.
+- For arrays, apply per entry.
 
 ### `regexReplace`
 
 - Apply JavaScript regex replacement using the provided pattern, replacement, and optional flags.
 - Invalid regex must be rejected at config validation time when possible.
+- For arrays, apply per entry.
 
 ## 8.2 Transform failure policy
 
@@ -362,8 +375,9 @@ On transform failure:
 
 - The field is marked with an error.
 - The global `ok` must become `false`.
-- Extraction should continue for other fields.
-- If a `default` exists, the implementation may use it only if the raw extraction produced no value. It must not silently replace a transform failure unless this behavior is explicitly added in a future version.
+- Extraction must continue for other fields.
+- The field value becomes "no value" for output-contract purposes (`null` for `one`, `[]` for `many`).
+- `default` must not be applied when transform failure occurs.
 
 ## 9. Defaults and required fields
 
@@ -427,14 +441,10 @@ For each field:
 
 1. Validate field rule.
 2. Initialize field diagnostics.
-3. Evaluate selectors in order.
-4. For each selector, observe matching elements using `HTMLRewriter`.
-5. Determine whether selector is usable for the given field type.
-6. If usable:
-   - mark it as winner
-   - collect value(s)
-   - stop evaluating later selectors for that field
-
+3. Register selector listeners and stream the document once with `HTMLRewriter`.
+4. For each selector match, collect candidate raw values for each interested field/selector pair.
+5. After streaming completes, evaluate selectors in configured order and finalize the first usable selector as winner.
+6. Use only winner candidates as field raw values.
 7. If raw value exists:
    - apply `trim`
    - apply transforms in order
@@ -450,20 +460,21 @@ For each field:
 
 ### 11.1 Internal implementation guidance
 
-A practical implementation may compile field rules into grouped selector handlers to avoid creating inefficient per-field passes.
+A practical implementation can compile field rules into grouped selector handlers to avoid creating inefficient per-field passes.
 
 Recommended approach:
 
 - Group fields by selector.
 - Register one rewriter handler per unique selector.
 - When an element matches, dispatch that element to all fields interested in that selector.
-- Each field maintains independent state, including whether a winning selector has already been found.
+- Each field maintains independent per-selector candidate buffers.
+- Finalize each field's winner after stream completion to preserve selector priority semantics.
 
 This avoids repeated parsing passes and maps well to `HTMLRewriter`.
 
 ## 11.2 Recommended internal state model
 
-The implementation should compile the public config into an internal extraction plan.
+The implementation can compile the public config into an internal extraction plan.
 
 Suggested internal types:
 
@@ -481,7 +492,7 @@ interface CompiledSelectorPlan {
 interface CompiledFieldPlan {
   field: string;
   selectorOrder: string[];
-  type: 'text' | 'html' | 'attribute' | 'exists';
+  type: 'text' | 'attribute' | 'exists';
   cardinality: 'one' | 'many';
   required: boolean;
   attribute?: string;
@@ -495,6 +506,7 @@ interface FieldRuntimeState {
   winnerFound: boolean;
   winningSelector?: string;
   selectorMatchCounts: Record<string, number>;
+  selectorCandidates: Record<string, unknown[]>;
   rawValues: unknown[];
   finalValue: unknown;
   usedDefault: boolean;
@@ -505,11 +517,12 @@ interface FieldRuntimeState {
 
 Behavioral requirements:
 
-- `winnerFound` prevents later selectors from taking over once a usable selector has been established.
-- `selectorMatchCounts` tracks all observed element matches for selectors that were evaluated before a winner was finalized.
-- `rawValues` stores values in document order.
-- For `cardinality: 'one'`, the implementation may stop collecting once a usable first value is finalized for the winning selector.
-- For `cardinality: 'many'`, the implementation must continue collecting values for the winning selector through the full document.
+- `selectorMatchCounts` tracks observed element matches per selector.
+- `selectorCandidates` stores candidate values in document order per selector.
+- `winnerFound` and `winningSelector` are set only after selector-order resolution at end-of-document.
+- `rawValues` stores only the finalized winner selector's candidate values.
+- For `cardinality: 'one'`, winner raw value is the first candidate from the winner selector.
+- For `cardinality: 'many'`, winner raw values include all winner-selector candidates in document order.
 
 ## 12. Handling `HTMLRewriter` constraints
 
@@ -526,16 +539,14 @@ Must support reliably:
 - multiple selectors per field
 - many-value extraction preserving order
 
-### 12.2 Optional / deferred v1 support
+### 12.2 Locked v1 decision
 
-`html` extraction may be difficult depending on the exact runtime strategy.
+`html` extraction is deferred out of v1.
 
-Two acceptable v1 outcomes:
+v1 behavior:
 
-1. Full support for `html` extraction.
-2. `html` declared in the schema but rejected by validation with a clear message stating that it is not yet implemented.
-
-The implementation must choose one and document it explicitly.
+- Any field with `type: 'html'` must fail config validation.
+- Validation error message must state that `html` extraction is planned for a later version.
 
 ## 13. Validation rules
 
@@ -553,7 +564,9 @@ Minimum validation rules:
 - `attribute` is required when `type = 'attribute'`.
 - `attribute` must not be required for non-attribute types.
 - `exists` may not use `cardinality: 'many'`.
-- `default` shape should roughly match cardinality where feasible.
+- `exists` may not define `default`.
+- `exists` may not define `required`.
+- `default` shape must match cardinality when statically verifiable.
 - Transform specs must be valid.
 - `regexReplace.pattern` must compile as a valid regex.
 
@@ -565,11 +578,11 @@ Minimum validation rules:
 - For `cardinality: 'one'` fields with no value and no default, value must be `null`.
 - For `cardinality: 'many'` fields with no value and no default, value must be `[]`.
 - For `exists`, value must always be boolean if extraction completed normally.
-- For `text`, `html`, and `attribute` with `cardinality: 'one'`, the value domain is:
+- For `text` and `attribute` with `cardinality: 'one'`, the value domain is:
   - transformed primitive value
   - or `null`
 
-- For `text`, `html`, and `attribute` with `cardinality: 'many'`, the value domain is:
+- For `text` and `attribute` with `cardinality: 'many'`, the value domain is:
   - array of transformed primitive values
   - or `[]`
 
@@ -578,10 +591,11 @@ Minimum validation rules:
 
 ### 14.1.1 Empty-string behavior
 
-- An empty string is still considered a produced value for `text`, `html`, or `attribute`.
+- An empty string is still considered a produced value for `text` or `attribute`.
 - Empty strings must not automatically trigger fallback selectors.
 - Fallback selectors are only attempted when no usable value is produced by the selector according to the field type semantics.
 - For `attribute`, a selector is usable only if at least one matched element contains the requested attribute, even if that attribute value is an empty string.
+- `exists` is not part of empty-string semantics and always resolves to boolean.
 
 ## 14.2 `ok`
 
@@ -592,9 +606,25 @@ Minimum validation rules:
 - no transform failed
 - no fatal extraction error occurred
 
+`ok` is `false` for invalid config, but invalid config is returned as data-plane errors rather than thrown exceptions.
+
 ## 14.3 `errors`
 
 Global `errors` is an aggregate list. Field-level details remain in diagnostics.
+
+Recommended v1 error handling:
+
+- `INVALID_CONFIG`: returned by `extract()` when validation fails.
+- `INVALID_INPUT`: thrown for unsupported input type.
+- `REQUIRED_FIELD_MISSING`: returned when required non-`exists` field has no value and no default.
+- `TRANSFORM_FAILED`: returned on any transform failure.
+- `INTERNAL_ERROR`: thrown for unrecoverable internal state errors.
+
+For invalid config responses:
+
+- `data` must be `{}`.
+- `diagnostics` must be `{}`.
+- `errors` must contain one or more `INVALID_CONFIG` entries derived from validation output.
 
 ## 15. Examples
 
@@ -632,7 +662,6 @@ const config: ExtractorConfig = {
     isOutOfStock: {
       selectors: ['.out-of-stock'],
       type: 'exists',
-      default: false,
     },
   },
 };
@@ -693,7 +722,7 @@ Recommended test style:
 
 ## 17. Performance requirements
 
-The implementation should be efficient enough for typical edge workloads.
+The implementation must be efficient enough for typical edge workloads.
 
 Requirements:
 
@@ -757,19 +786,25 @@ Recommended package structure:
 - attribute extraction
 - exists extraction
 - diagnostics
+- deterministic selector-priority finalization after stream completion
 - tests
 
 ### Phase 2
 
-- many-cardinality improvements
 - transform library
 - config compilation optimization
 - better error reporting
+- cache validated/compiled config by hash (optional)
 
 ### Phase 3
 
+- release-hardening, docs polish, and examples
+
+### Phase 4 (v1.1+)
+
 - optional `html` extraction support
-- compiled config caching
+- debug-only match-value introspection
+- nested output paths
 - developer playground or debug helpers
 
 ## 21. Acceptance criteria for v1
@@ -780,33 +815,23 @@ A v1 implementation is acceptable if all of the following are true:
 - `extract(Response, config)` works.
 - Invalid configs are rejected.
 - `text`, `attribute`, and `exists` are fully supported.
+- `html` is explicitly rejected in v1 validation.
 - `one` and `many` cardinality are supported where applicable.
 - `required` and `default` semantics work as specified.
 - Diagnostics are returned for every field.
 - Extraction continues across non-fatal per-field failures.
 - Tests cover the required scenarios.
-- The README can explain the library in under five minutes to a new user.
+- The README explains the library in under five minutes to a new user.
 
-## 22. Open questions
+## 22. Post-v1 backlog (non-blocking for v1)
 
-These are intentionally left for implementation/design decisions and should be resolved explicitly during development.
+v1 is intentionally locked by this plan. The following items are explicitly deferred:
 
-1. Whether `html` extraction is included in v1 or deferred.
-2. Whether config compilation is exposed publicly or remains internal.
-3. Whether `includeMatchValues` should expose raw intermediate values for debugging.
-4. Whether `parseNumber` should support locale-aware parsing in a later version.
-5. Whether nested object output paths should be supported in v2.
-
-## 22.1 Current recommendation for v1
-
-To keep the first implementation shippable and robust, the recommended v1 decisions are:
-
-- Support `text`, `attribute`, and `exists` fully.
-- Defer `html` extraction unless it is proven clean and reliable with the chosen `HTMLRewriter` strategy.
-- Keep config compilation internal.
-- Include diagnostics by default.
-- Do not support nested output paths in v1.
-- Treat empty strings as valid produced values.
+1. `html` extraction type and stream-safe semantics.
+2. Publicly exposed compiled config API.
+3. Debug-only exposure of raw match values.
+4. Locale-aware numeric parsing extensions.
+5. Nested object output paths.
 
 ## 23. Recommended README one-liner
 
