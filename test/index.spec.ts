@@ -383,8 +383,7 @@ describe('extract', () => {
   });
 
   it('applies transforms in order', async () => {
-    const html =
-      '<div><span class="price"> 12.5 </span><a class="link" href="/item/1">item</a><span class="flag">YeS</span></div>';
+    const html = '<div><span class="price"> 12.5 </span><a class="link" href="/item/1">item</a><span class="flag">YeS</span></div>';
 
     const result = await extract(
       html,

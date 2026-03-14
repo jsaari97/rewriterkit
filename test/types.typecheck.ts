@@ -1,7 +1,6 @@
 import { extract, type ExtractionResult, type ExtractorConfig, type InferExtractedData } from '../src';
 
-type IsEqual<TLeft, TRight> =
-  (<T>() => T extends TLeft ? 1 : 2) extends (<T>() => T extends TRight ? 1 : 2) ? true : false;
+type IsEqual<TLeft, TRight> = (<T>() => T extends TLeft ? 1 : 2) extends <T>() => T extends TRight ? 1 : 2 ? true : false;
 
 function assertTrue<T extends true>(value: T): void {
   void value;

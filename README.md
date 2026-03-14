@@ -153,14 +153,11 @@ function extract<TConfig extends ExtractorConfig>(
   options?: ExtractOptions,
 ): Promise<ExtractionResult<InferExtractedData<TConfig>>>;
 
-function extract<TData>(
-  input: string | Response,
-  config: ExtractorConfig,
-  options?: ExtractOptions,
-): Promise<ExtractionResult<TData>>;
+function extract<TData>(input: string | Response, config: ExtractorConfig, options?: ExtractOptions): Promise<ExtractionResult<TData>>;
 ```
 
 Behavior:
+
 - Validates config before extraction.
 - Returns `ok: false` with `INVALID_CONFIG` errors for invalid config.
 - Uses selector priority order and finalizes the winning selector after stream completion.
@@ -168,10 +165,12 @@ Behavior:
 - Throws runtime `ExtractionRuntimeError` with code `INVALID_INPUT` or `INTERNAL_ERROR` for fatal setup/runtime failures.
 
 Typed output:
+
 - Inferred by default from config literals (`as const satisfies ExtractorConfig`).
 - Optional override: use `extract<MyDataShape>(...)` to force a custom output type.
 
 Value inference:
+
 - `type: 'exists'` -> `boolean`
 - `type: 'text' | 'attribute'` -> `string | null` (`string[]` for `cardinality: 'many'`)
 - `required: true` on one-cardinality `text`/`attribute` fields removes `null`
@@ -198,6 +197,7 @@ Returns structured validation errors without running extraction.
 ## Transform Support
 
 Built-in transforms:
+
 - `trim`
 - `normalizeWhitespace`
 - `toLowerCase`
@@ -211,12 +211,14 @@ Built-in transforms:
 ## Result Contract
 
 `ExtractionResult<TData>` returns:
+
 - `data`: extracted output for all declared fields.
 - `diagnostics`: extraction diagnostics split by top-level fields and lists.
 - `ok`: overall success flag.
 - `errors`: aggregate non-fatal extraction errors.
 
 Missing value behavior:
+
 - `one` cardinality returns `null`.
 - `many` cardinality returns `[]`.
 
@@ -281,5 +283,10 @@ npm run check
 RewriterKit is designed around Workers `HTMLRewriter` semantics, including streaming text chunks.
 
 Reference docs:
+
 - [HTMLRewriter API](https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/)
 - [Workers platform limits](https://developers.cloudflare.com/workers/platform/limits/)
+
+## License
+
+MIT
