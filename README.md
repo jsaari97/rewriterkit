@@ -1,12 +1,41 @@
 # RewriterKit
 
-RewriterKit is a declarative HTML extraction library built on top of Cloudflare Workers `HTMLRewriter`.
+Declarative HTML extraction for runtimes that expose the `HTMLRewriter` API.
+
+## Overview
+
+RewriterKit turns selector-based extraction rules into typed data output. You define a config once, run `extract()`, and receive:
+
+- extracted `data` with type-inference from your config
+- per-field `diagnostics` on selector matches, winning selector, and transform usage
+- non-fatal `errors` encountered during extraction (for example missing required field or transform failure)
+- an overall `ok` flag indicating whether extraction succeeded without any errors
+
+## Features
+
+- Selector priority/fallback behavior with deterministic output
+- Cardinality support (`one` and `many`)
+- Built-in transforms (string normalization, parsing, URL resolution, regex replacement)
+- List extraction (`kind: 'list'`) for array-of-object output
+- Structured validation via `validateConfig()`
+- Strong TypeScript inference from config literals
 
 ## Installation
 
 ```bash
 npm install rewriterkit
 ```
+
+## Runtime Requirements
+
+RewriterKit requires a runtime with global `HTMLRewriter` and standard Fetch API primitives (`Response`, `URL`).
+
+- Designed for Cloudflare Workers/workerd-compatible runtimes
+- If `HTMLRewriter` is missing at runtime, `extract()` throws `ExtractionRuntimeError` with code `INTERNAL_ERROR`
+
+HTMLRewriter reference:
+
+- [Cloudflare Workers HTMLRewriter API](https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/)
 
 ## Quick Start
 
@@ -54,27 +83,29 @@ const result = await extract(html, config, {
 
 console.log(result.ok);
 console.log(result.data); // { title, price, imageUrl, hasPromo }
+console.log(result.errors);
 console.log(result.diagnostics);
 ```
 
-## Metadata Example
+## Cloudflare Workers Example
 
 ```ts
-import { extract } from 'rewriterkit';
+import { extract, type ExtractorConfig } from 'rewriterkit';
 
-const result = await extract(html, {
+const config = {
   version: '1',
   fields: {
     title: {
-      selectors: ["meta[property='og:title']", 'title'],
-      type: 'attribute',
-      attribute: 'content',
+      selectors: ['h1', 'title'],
+      type: 'text',
+      transforms: ['trim'],
       required: true,
     },
     description: {
-      selectors: ["meta[name='description']", "meta[property='og:description']"],
+      selectors: ["meta[name='description']"],
       type: 'attribute',
       attribute: 'content',
+      transforms: ['trim'],
     },
     canonicalUrl: {
       selectors: ["link[rel='canonical']"],
@@ -83,66 +114,30 @@ const result = await extract(html, {
       transforms: ['absoluteUrl'],
     },
   },
-});
-```
+} as const satisfies ExtractorConfig;
 
-## List Extraction Example
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const reqUrl = new URL(request.url);
+    const targetUrl = reqUrl.searchParams.get('url') ?? 'https://example.com/';
 
-```ts
-const result = await extract(html, {
-  version: '1',
-  fields: {
-    products: {
-      kind: 'list',
-      itemSelector: '.product-card',
-      fields: {
-        title: {
-          selectors: ['.title'],
-          type: 'text',
-          transforms: ['trim'],
-        },
-        price: {
-          selectors: ['.price'],
-          type: 'text',
-          transforms: ['parseNumber'],
-        },
-        url: {
-          selectors: ['a.title'],
-          type: 'attribute',
-          attribute: 'href',
-          transforms: ['absoluteUrl'],
-        },
-      },
-    },
+    const upstream = await fetch(targetUrl);
+    const result = await extract(upstream, config, {
+      baseUrl: upstream.url,
+    });
+
+    return Response.json({
+      targetUrl,
+      ok: result.ok,
+      data: result.data,
+      errors: result.errors,
+      diagnostics: result.diagnostics,
+    });
   },
-});
-```
-
-## Optional Explicit Output Type
-
-```ts
-type PageData = {
-  title: string | null;
-  tags: string[];
 };
-
-const result = await extract<PageData>(html, {
-  version: '1',
-  fields: {
-    title: {
-      selectors: ['h1'],
-      type: 'text',
-    },
-    tags: {
-      selectors: ['.tag'],
-      type: 'text',
-      cardinality: 'many',
-    },
-  },
-});
 ```
 
-## API
+## API Reference
 
 ### `extract(input, config, options?)`
 
@@ -159,24 +154,15 @@ function extract<TData>(input: string | Response, config: ExtractorConfig, optio
 Behavior:
 
 - Validates config before extraction.
-- Returns `ok: false` with `INVALID_CONFIG` errors for invalid config.
-- Uses selector priority order and finalizes the winning selector after stream completion.
-- Continues extraction across non-fatal field errors.
-- Throws runtime `ExtractionRuntimeError` with code `INVALID_INPUT` or `INTERNAL_ERROR` for fatal setup/runtime failures.
+- Returns `ok: false` with `INVALID_CONFIG` entries in `errors` when config is invalid.
+- Preserves selector order priority. For each field, the first selector that produces usable values wins.
+- Continues extraction after non-fatal field/list issues (for example missing required field or transform failures).
+- Throws `ExtractionRuntimeError` for fatal runtime/setup failures (`INVALID_INPUT`, `INTERNAL_ERROR`).
 
 Typed output:
 
-- Inferred by default from config literals (`as const satisfies ExtractorConfig`).
-- Optional override: use `extract<MyDataShape>(...)` to force a custom output type.
-
-Value inference:
-
-- `type: 'exists'` -> `boolean`
-- `type: 'text' | 'attribute'` -> `string | null` (`string[]` for `cardinality: 'many'`)
-- `required: true` on one-cardinality `text`/`attribute` fields removes `null`
-- terminal `parseNumber` / `parseInteger` -> `number`
-- terminal `parseBoolean` -> `boolean`
-- list rules -> arrays of inferred item objects
+- Preferred: config literals with `as const satisfies ExtractorConfig`.
+- Override: `extract<MyDataShape>(...)` when you want an explicit data contract.
 
 ### `validateConfig(config)`
 
@@ -184,19 +170,61 @@ Value inference:
 function validateConfig(config: unknown): ValidationResult;
 ```
 
-Returns structured validation errors without running extraction.
+Returns `{ ok, errors }` without executing extraction.
 
-## Supported Field Types
+### `ExtractorConfig`
 
-- `text`
-- `attribute`
-- `exists`
+```ts
+interface ExtractorConfig {
+  version: '1';
+  fields: Record<string, OutputRule>;
+}
+```
 
-`html` is intentionally rejected in v1.
+Notes:
 
-## Transform Support
+- `version` must be exactly `'1'`.
+- `fields` must contain at least one entry.
 
-Built-in transforms:
+### `FieldRule` (`text`, `attribute`, `exists`)
+
+| Option        | Type                                         | Required    | Notes                                                   |
+| ------------- | -------------------------------------------- | ----------- | ------------------------------------------------------- |
+| `selectors`   | `string[]`                                   | yes         | Non-empty selector list in priority order.              |
+| `type`        | `'text' \| 'attribute' \| 'exists'`          | yes         | `html` is not supported in v1.                          |
+| `cardinality` | `'one' \| 'many'`                            | no          | Defaults to `'one'`.                                    |
+| `required`    | `boolean`                                    | no          | Allowed for `text`/`attribute` only.                    |
+| `default`     | `PrimitiveValue \| PrimitiveValue[] \| null` | no          | For `many`, must be an array. Not allowed for `exists`. |
+| `attribute`   | `string`                                     | conditional | Required when `type: 'attribute'`; invalid otherwise.   |
+| `transforms`  | `TransformSpec[]`                            | no          | Applied left-to-right. Not allowed for `exists`.        |
+| `description` | `string`                                     | no          | Optional metadata only.                                 |
+
+`exists` constraints in v1:
+
+- cannot use `cardinality: 'many'`
+- cannot use `default`
+- cannot use `required`
+- cannot use `transforms`
+
+### `ListRule`
+
+```ts
+interface ListRule {
+  kind: 'list';
+  itemSelector: string;
+  fields: Record<string, FieldRule>;
+}
+```
+
+Notes:
+
+- Produces `Array<Record<string, ...>>` under the top-level field key.
+- `fields` must be non-empty.
+- Nested lists are not supported in v1.
+
+### `TransformSpec`
+
+Built-in string transforms:
 
 - `trim`
 - `normalizeWhitespace`
@@ -206,67 +234,71 @@ Built-in transforms:
 - `parseInteger`
 - `parseBoolean`
 - `absoluteUrl`
-- `{ kind: 'regexReplace', pattern, replacement, flags? }`
 
-## Result Contract
+Object transform:
 
-`ExtractionResult<TData>` returns:
+```ts
+{
+  kind: 'regexReplace';
+  pattern: string;
+  replacement: string;
+  flags?: string;
+}
+```
 
-- `data`: extracted output for all declared fields.
-- `diagnostics`: extraction diagnostics split by top-level fields and lists.
-- `ok`: overall success flag.
-- `errors`: aggregate non-fatal extraction errors.
+Transform behavior:
+
+- Applied in order.
+- For `cardinality: 'many'`, the chain is applied to each array item.
+- `parseNumber` uses JS numeric parsing and fails on `NaN`.
+- `parseInteger` accepts only whole-number strings (`+/-` optional).
+- `parseBoolean` accepts (case-insensitive): `true`, `false`, `1`, `0`, `yes`, `no`.
+- `absoluteUrl` resolves absolute URLs directly; relative URLs require `ExtractOptions.baseUrl`.
+
+### `ExtractOptions`
+
+```ts
+interface ExtractOptions {
+  baseUrl?: string;
+}
+```
+
+Use `baseUrl` when any extracted value may need `absoluteUrl` resolution from relative URLs.
+
+### `ExtractionResult<TData>`
+
+```ts
+interface ExtractionResult<TData = Record<string, unknown>> {
+  data: TData;
+  diagnostics: ExtractionDiagnostics;
+  ok: boolean;
+  errors: ExtractionError[];
+}
+```
 
 Missing value behavior:
 
-- `one` cardinality returns `null`.
-- `many` cardinality returns `[]`.
+- `cardinality: 'one'` -> `null` when no value and no default
+- `cardinality: 'many'` -> `[]` when no value and no default
 
-## Diagnostics Example
+## Diagnostics and Errors
 
-```json
-{
-  "fields": {
-    "title": {
-      "field": "title",
-      "matched": true,
-      "selectorTried": ["h1", ".title"],
-      "winningSelector": "h1",
-      "matchCount": 1,
-      "valueProduced": true,
-      "usedDefault": false,
-      "required": true,
-      "errors": []
-    }
-  },
-  "lists": {
-    "products": {
-      "field": "products",
-      "itemSelector": ".product-card",
-      "itemCount": 2,
-      "errors": [],
-      "items": [
-        {
-          "index": 0,
-          "fields": {
-            "title": {
-              "field": "title",
-              "matched": true,
-              "selectorTried": [".title"],
-              "winningSelector": ".title",
-              "matchCount": 1,
-              "valueProduced": true,
-              "usedDefault": false,
-              "required": false,
-              "errors": []
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-```
+`errors` contains non-fatal extraction errors that still return a result object:
+
+- `INVALID_CONFIG`
+- `REQUIRED_FIELD_MISSING`
+- `TRANSFORM_FAILED`
+
+Fatal failures throw `ExtractionRuntimeError`:
+
+- `INVALID_INPUT` (input is not `string` or `Response`)
+- `INTERNAL_ERROR` (runtime setup/rewriter failures)
+
+Diagnostics are always returned on successful extraction flow and include:
+
+- top-level field diagnostics (`diagnostics.fields`)
+- list-level diagnostics and per-item field diagnostics (`diagnostics.lists`)
+- selector attempts, winning selector, match counts, and whether defaults were used
 
 ## Development
 
@@ -277,15 +309,6 @@ npm run test:run
 npm run build
 npm run check
 ```
-
-## Cloudflare Workers Notes
-
-RewriterKit is designed around Workers `HTMLRewriter` semantics, including streaming text chunks.
-
-Reference docs:
-
-- [HTMLRewriter API](https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/)
-- [Workers platform limits](https://developers.cloudflare.com/workers/platform/limits/)
 
 ## License
 
