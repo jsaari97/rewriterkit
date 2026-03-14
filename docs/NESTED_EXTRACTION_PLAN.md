@@ -5,6 +5,7 @@
 This document defines how RewriterKit v1 adds list/object extraction using a **single top-level `fields` map**.
 
 Primary target use case:
+
 - Extract repeating item lists (for example product cards) as:
   - `products: Array<{ title, price, url, ... }>`
 
@@ -13,6 +14,7 @@ Primary target use case:
 Current implementation supports multi-value extraction (`cardinality: 'many'`) but returns parallel arrays.
 
 Parallel arrays are insufficient when:
+
 - Per-item fields are missing inconsistently.
 - We need stable object grouping at item boundaries.
 - Caller code should not perform index zipping.
@@ -20,6 +22,7 @@ Parallel arrays are insufficient when:
 ## 3. Scope
 
 ### In scope
+
 - List-of-objects extraction.
 - Per-item selector evaluation and transforms.
 - Per-item diagnostics and errors.
@@ -27,6 +30,7 @@ Parallel arrays are insufficient when:
 - Unified top-level config model for flat fields and lists.
 
 ### Out of scope (initial nested release)
+
 - Arbitrary deep recursive list nesting (lists inside lists).
 - Cross-item joins/references.
 - Computed fields/expressions.
@@ -36,6 +40,7 @@ Parallel arrays are insufficient when:
 Because the package is not published yet, nested extraction will be integrated into **v1** directly.
 
 Design rules:
+
 - Keep `version: '1'`.
 - Keep top-level key as `fields`.
 - Widen `fields` values from only `FieldRule` to `OutputRule` (`FieldRule | ListRule`).
@@ -72,6 +77,7 @@ export interface ListRule {
 ```
 
 Validation baseline:
+
 - `fields` must be a non-empty object.
 - each top-level key maps to either a valid `FieldRule` or `ListRule`.
 
@@ -132,10 +138,12 @@ Expected output:
 ## 6. Rule Discrimination
 
 Top-level `fields.<key>` rule classification:
+
 - `kind: 'list'` => `ListRule`
 - `kind: 'field'` or no `kind` => `FieldRule`
 
 Invalid cases:
+
 - if `kind` is present and not `'list'` or `'field'`, validation fails.
 - if `kind: 'list'` and field-rule-only properties are present at that level, validation fails.
 
@@ -156,11 +164,13 @@ Invalid cases:
 ## 7.3 Selector winner logic
 
 Per field (top-level field or list-item field):
+
 - Try selectors in configured order.
 - First usable selector wins.
 - Use only winner values for final value.
 
 Usability rules remain:
+
 - `text`: matched element counts (including empty string content).
 - `attribute`: usable only if at least one matched element has attribute.
 - `exists`: any match counts.
@@ -168,6 +178,7 @@ Usability rules remain:
 ## 7.4 Defaults and required
 
 Per field:
+
 - If no value produced, apply default if provided.
 - If still missing and required, emit `REQUIRED_FIELD_MISSING`.
 
@@ -182,6 +193,7 @@ Per field:
 ## 8.1 Compile plan
 
 Compile `fields` into:
+
 - top-level field plans
 - list plans keyed by output key
 - selector dispatch tables for:
@@ -192,13 +204,16 @@ Compile `fields` into:
 ## 8.2 Streaming state
 
 For each list output key:
+
 - `activeItemStack: ItemRuntimeState[]`
 - `results: unknown[]`
 
 For each active item:
+
 - field runtime state equivalent to existing v1 field state.
 
 For top-level fields:
+
 - keep existing runtime state logic.
 
 ## 8.3 Event handling
@@ -222,6 +237,7 @@ For top-level fields:
 ## 8.4 Nested item elements
 
 Initial rule:
+
 - If `itemSelector` appears inside another item of same list, treat it as a new nested item context.
 - Field matches route to nearest active item.
 
@@ -234,7 +250,7 @@ Top-level diagnostics contract:
 ```ts
 interface ExtractionDiagnostics {
   fields: Record<string, FieldDiagnostics>; // top-level field rules only
-  lists: Record<string, ListDiagnostics>;   // top-level list rules only
+  lists: Record<string, ListDiagnostics>; // top-level list rules only
 }
 
 interface ListDiagnostics {
@@ -269,6 +285,7 @@ Extend `ExtractionError` with optional location:
 ## 10. Validation Rules (Extended v1)
 
 Minimum required:
+
 - `version === '1'`
 - `fields` is non-empty object.
 - top-level keys are non-empty strings.
@@ -303,6 +320,7 @@ No new top-level API required.
 ## 13. Test Plan
 
 Required tests:
+
 1. Basic top-level field extraction via `fields`.
 2. Basic list extraction (10 items).
 3. Missing field in middle item.
@@ -327,29 +345,34 @@ Required tests:
 ## 15. Implementation Phases
 
 ### Phase A: Types + Validator
+
 - Widen top-level `fields` map to `OutputRule`.
 - Add `ListRule` + discrimination by `kind`.
 - Add strict validation for unknown `kind` values.
 - Add list validation for `itemSelector` and nested `fields`.
 
 ### Phase B: Runtime Core
+
 - Compile `fields` into top-level field and list plans.
 - Add list item runtime contexts.
 - Route selector matches to nearest active item.
 - Finalize per-item fields at item end.
 
 ### Phase C: Diagnostics + Errors
+
 - Add `diagnostics.fields` and `diagnostics.lists`.
 - Add per-item field diagnostics under list diagnostics.
 - Add `list` + `itemIndex` metadata on relevant errors.
 
 ### Phase D: Hardening + Docs
+
 - Stress tests and nesting edge tests.
 - Update README with unified `fields` examples including lists.
 
 ## 16. Acceptance Criteria
 
 Feature is acceptable when:
+
 - all extraction rules remain under top-level `fields`.
 - top-level field and list rules both work in one config.
 - list extraction returns stable list-of-object output in document order.

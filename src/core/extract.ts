@@ -148,9 +148,7 @@ function selectWinningSelector(field: CompiledFieldPlan, state: FieldRuntimeStat
 }
 
 function sortedCandidateValues(state: FieldRuntimeState, selector: string): unknown[] {
-  return [...(state.selectorCandidates[selector] ?? [])]
-    .sort((a, b) => a.order - b.order)
-    .map((candidate) => candidate.value);
+  return [...(state.selectorCandidates[selector] ?? [])].sort((a, b) => a.order - b.order).map((candidate) => candidate.value);
 }
 
 function emptyValueForCardinality(cardinality: 'one' | 'many'): null | [] {
@@ -412,16 +410,7 @@ export async function extract<TConfig extends ExtractorConfig, TData = InferExtr
                 throw createInternalError(`Missing runtime state for list field '${listName}.${itemFieldName}'.`);
               }
 
-              const finalized = finalizeField(
-                itemFieldName,
-                itemFieldPlan,
-                itemFieldState,
-                options,
-                errors,
-                setNotOk,
-                listName,
-                itemIndex,
-              );
+              const finalized = finalizeField(itemFieldName, itemFieldPlan, itemFieldState, options, errors, setNotOk, listName, itemIndex);
 
               itemData[itemFieldName] = finalized.value;
               itemDiagnostics[itemFieldName] = finalized.diagnostics;

@@ -9,6 +9,7 @@ The library is not responsible for fetching content. Its input is raw HTML or an
 Primary goal: make `HTMLRewriter` practical for schema-driven extraction use cases such as scraping, metadata extraction, product/article parsing, and resilient selector maintenance.
 
 Normative language:
+
 - `must` indicates a required v1 behavior.
 - `should` indicates guidance or a non-blocking recommendation.
 
@@ -39,6 +40,7 @@ Normative language:
 RewriterKit is an HTML extraction engine, not a full scraper.
 
 Intended architecture:
+
 1. Caller fetches or otherwise obtains HTML.
 2. Caller passes HTML and extractor config into the library.
 3. Library applies rules via `HTMLRewriter`.
@@ -65,6 +67,7 @@ export function validateConfig(config: unknown): ValidationResult;
 ### 5.1.1 `extract`
 
 Behavior:
+
 - If `input` is a `string`, treat it as raw HTML.
 - If `input` is a `Response`, consume its body as HTML.
 - Validate config before extraction.
@@ -77,6 +80,7 @@ Behavior:
 ### 5.1.2 `validateConfig`
 
 Behavior:
+
 - Validate shape and semantics of config.
 - Return structured validation errors.
 - Must be safe to call independently of extraction.
@@ -242,16 +246,19 @@ export interface ValidationResult {
 ## 6.1 Rule discrimination
 
 Top-level `fields.<key>` rule classification:
+
 - `kind: 'list'` => `ListRule`
 - `kind: 'field'` or no `kind` => `FieldRule`
 
 Invalid cases:
+
 - If `kind` is present and not `'list'` or `'field'`, validation must fail.
 - If `kind: 'list'` and field-only properties (`selectors`, `type`, etc.) are present at that level, validation must fail.
 
 ## 6.2 Field semantics (top-level or inside list)
 
 Shared semantics:
+
 - `selectors` are tried in order.
 - Winner is first selector yielding at least one usable match.
 - Winner selection is finalized after document stream completion.
@@ -280,12 +287,14 @@ Shared semantics:
 - `true` if any winner-selector match exists, else `false`.
 
 Naming guidance:
+
 - Prefer direct names (`hasPrice`, `isOutOfStock`).
 - Avoid implicit negation (`inStock` sourced from `.out-of-stock`).
 
 ## 6.3 List semantics
 
 For `ListRule`:
+
 - `itemSelector` defines item container boundaries.
 - Every matched item container finalizes one object in output array.
 - Item objects use nested `fields` rules.
@@ -305,6 +314,7 @@ For `ListRule`:
 ## 8. Transforms
 
 Order:
+
 1. Extract raw value.
 2. Apply `trim` if enabled.
 3. Apply `transforms` in order.
@@ -313,6 +323,7 @@ Order:
 Applies equally to top-level fields and list-item fields.
 
 Supported transforms and semantics:
+
 - `trim`
 - `normalizeWhitespace`
 - `toLowerCase`
@@ -324,6 +335,7 @@ Supported transforms and semantics:
 - `regexReplace`
 
 Failure policy:
+
 - Field gets error.
 - Global `ok = false`.
 - Continue extraction.
@@ -333,10 +345,12 @@ Failure policy:
 ## 9. Defaults and required
 
 If field produces no value:
+
 - Use `default` if provided.
 - Mark `usedDefault = true`.
 
 If still no value and `required`:
+
 - Add `REQUIRED_FIELD_MISSING`.
 - Set `ok = false`.
 - For list fields, include `list` and `itemIndex` on error.
@@ -346,11 +360,13 @@ If still no value and `required`:
 Diagnostics are first-class and always returned.
 
 Contract:
+
 - `diagnostics.fields` for top-level field rules.
 - `diagnostics.lists` for list rules.
 - Each list includes per-item per-field diagnostics.
 
 Minimum per-field diagnostics:
+
 - field name
 - matched flag
 - selectors tried
@@ -365,6 +381,7 @@ Minimum per-field diagnostics:
 ## 11. Extraction algorithm
 
 High-level behavior:
+
 1. Validate config.
 2. Compile plan for top-level fields + list rules.
 3. Initialize runtime state.
@@ -380,6 +397,7 @@ High-level behavior:
 ### 11.1 Internal implementation guidance
 
 Recommended:
+
 - Compile config into grouped selector dispatch tables.
 - Use one rewriter pass.
 - Keep independent per-rule state.
@@ -388,6 +406,7 @@ Recommended:
 ## 12. Handling HTMLRewriter constraints
 
 Must support reliably:
+
 - text extraction
 - attribute extraction
 - existence checks
@@ -397,11 +416,13 @@ Must support reliably:
 - list extraction with item scoping via `itemSelector`
 
 Locked v1 decision:
+
 - `type: 'html'` remains unsupported and must fail validation.
 
 ## 13. Validation rules
 
 Minimum required:
+
 - `version === '1'`
 - `fields` is non-empty object
 - top-level field names are non-empty
@@ -435,12 +456,14 @@ Minimum required:
 - `exists` values are always boolean on normal completion.
 
 Empty-string behavior:
+
 - Empty string counts as produced value for `text` and `attribute`.
 - Empty strings do not trigger fallback selectors.
 
 ## 14.2 `ok`
 
 `ok` is `true` only if:
+
 - config valid
 - no required-field misses
 - no transform failures
@@ -451,6 +474,7 @@ Empty-string behavior:
 Aggregate error list.
 
 Codes:
+
 - `INVALID_CONFIG`
 - `INVALID_INPUT`
 - `REQUIRED_FIELD_MISSING`
@@ -458,6 +482,7 @@ Codes:
 - `INTERNAL_ERROR`
 
 For invalid config response:
+
 - `data` must be `{}`
 - `diagnostics` must be `{ fields: {}, lists: {} }`
 - `errors` must contain one or more `INVALID_CONFIG`
@@ -533,6 +558,7 @@ const config: ExtractorConfig = {
 ## 16. Testing requirements
 
 Minimum coverage areas:
+
 - config validation success/failure
 - invalid `kind` and list-rule validation errors
 - single field text extraction
@@ -551,6 +577,7 @@ Minimum coverage areas:
 - nested-text behavior in list items
 
 Recommended style:
+
 - fixture-based HTML
 - deterministic assertions on `data`
 - deterministic assertions on `diagnostics`
@@ -563,6 +590,7 @@ Recommended style:
 - Preserve deterministic results.
 
 Non-binding optimizations:
+
 - precompile config
 - cache validated/compiled config by hash
 - reuse transform functions
@@ -587,6 +615,7 @@ Non-binding optimizations:
 ## 20. Suggested implementation phases
 
 ### Phase 1
+
 - public types
 - config validation
 - text/attribute/exists extraction
@@ -595,18 +624,21 @@ Non-binding optimizations:
 - tests
 
 ### Phase 2
+
 - transform library
 - config compilation optimization
 - better error reporting
 - cache validated/compiled config by hash
 
 ### Phase 3
+
 - list extraction (`kind: 'list'` + `itemSelector`)
 - per-item diagnostics and error metadata
 - hardening tests
 - docs polish
 
 ### Phase 4 (v1.1+)
+
 - optional `html` extraction
 - debug-only match-value introspection
 - developer playground/debug helpers
@@ -614,6 +646,7 @@ Non-binding optimizations:
 ## 21. Acceptance criteria for v1
 
 v1 is acceptable if:
+
 - `extract(string, config)` works.
 - `extract(Response, config)` works.
 - invalid configs are rejected.
@@ -644,6 +677,7 @@ v1 is acceptable if:
 RewriterKit
 
 Rationale:
+
 - Communicates foundation on Cloudflare `HTMLRewriter`.
 - "Kit" signals extensible toolkit.
 - Short, memorable, import-friendly.

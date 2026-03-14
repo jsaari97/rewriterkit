@@ -116,7 +116,7 @@ function validateDefault(issues: ValidationIssue[], path: string, cardinality: '
 
 function validateFieldRule(issues: ValidationIssue[], path: string, rawField: Record<string, unknown>): void {
   if (hasOwn(rawField, 'kind')) {
-    pushIssue(issues, `${path}.kind`, 'invalid_kind', "`kind` is only allowed for list rules and must be `list`.");
+    pushIssue(issues, `${path}.kind`, 'invalid_kind', '`kind` is only allowed for list rules and must be `list`.');
   }
 
   if (!Array.isArray(rawField.selectors) || rawField.selectors.length === 0) {
@@ -161,7 +161,7 @@ function validateFieldRule(issues: ValidationIssue[], path: string, rawField: Re
   }
 
   if (hasOwn(rawField, 'trim')) {
-    pushIssue(issues, `${path}.trim`, 'unexpected_property', "`trim` is not a valid field property in v1.");
+    pushIssue(issues, `${path}.trim`, 'unexpected_property', '`trim` is not a valid field property in v1.');
   }
 
   const resolvedType = typeof rawField.type === 'string' ? rawField.type : undefined;
@@ -223,7 +223,7 @@ function validateListRule(issues: ValidationIssue[], path: string, rawList: Reco
   }
 
   if (hasOwn(rawList, 'trim')) {
-    pushIssue(issues, `${path}.trim`, 'unexpected_property', "`trim` is not a valid list property in v1.");
+    pushIssue(issues, `${path}.trim`, 'unexpected_property', '`trim` is not a valid list property in v1.');
   }
 
   if (!isRecord(rawList.fields)) {
@@ -304,7 +304,7 @@ export function validateConfig(config: unknown): ValidationResult {
           continue;
         }
 
-        pushIssue(issues, `${fieldPath}.kind`, 'invalid_kind', "`kind` is only allowed for list rules and must be `list`.");
+        pushIssue(issues, `${fieldPath}.kind`, 'invalid_kind', '`kind` is only allowed for list rules and must be `list`.');
         continue;
       }
 

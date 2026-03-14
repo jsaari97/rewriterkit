@@ -28,7 +28,10 @@ function getInputType(value: unknown): string {
 
 export function createInvalidInputError(input: unknown): ExtractionRuntimeError {
   const inputType = getInputType(input);
-  return new ExtractionRuntimeError('INVALID_INPUT', `extract() expected input to be an HTML string or a Response, but received ${inputType}.`);
+  return new ExtractionRuntimeError(
+    'INVALID_INPUT',
+    `extract() expected input to be an HTML string or a Response, but received ${inputType}.`,
+  );
 }
 
 export function createInternalError(message: string, cause?: unknown): ExtractionRuntimeError {

@@ -68,9 +68,7 @@ type InferDefaultForMany<TRule extends FieldRule> = TRule extends { default: inf
     : never
   : never;
 
-type InferFieldScalar<TRule extends FieldRule> = TRule['type'] extends 'exists'
-  ? boolean
-  : InferScalarFromTransforms<TRule['transforms']>;
+type InferFieldScalar<TRule extends FieldRule> = TRule['type'] extends 'exists' ? boolean : InferScalarFromTransforms<TRule['transforms']>;
 
 export type InferFieldValue<TRule extends FieldRule> = TRule['type'] extends 'exists'
   ? boolean
