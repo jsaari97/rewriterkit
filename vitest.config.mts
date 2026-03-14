@@ -1,5 +1,9 @@
 import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig({
-  test: {},
+  test: {
+    coverage: {
+      provider: 'istanbul',
+    },
+  },
 });
