@@ -1,6 +1,6 @@
 {
   "name": "rewriterkit",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Declarative HTML extraction library built on Cloudflare HTMLRewriter.",
   "license": "MIT",
   "type": "module",
