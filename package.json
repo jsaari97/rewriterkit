@@ -28,15 +28,15 @@
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.4",
+    "@cloudflare/vitest-pool-workers": "^0.13.2",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.0",
-    "@vitest/coverage-istanbul": "^3.2.4",
+    "@vitest/coverage-istanbul": "^4.1.0",
     "eslint": "^10.0.3",
     "globals": "^17.4.0",
     "prettier": "^3.8.1",
     "typescript": "^5.5.2",
     "typescript-eslint": "^8.57.0",
-    "vitest": "~3.2.0"
+    "vitest": "^4.1.0"
   }
 }
